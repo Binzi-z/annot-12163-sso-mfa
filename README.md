@@ -16,13 +16,13 @@ python -m pytest tests -q
 
 ## 现状
 
-20 个用例里 16 绿 4 红，红的是安全用例：
+20 个用例全部通过。四类问题已修复，对应回归用例：
 
-| 用例 | 现状 |
+| 用例 | 修复 |
 |---|---|
-| `test_replay_is_rejected` | 同一个验证码可以重复使用 |
-| `test_session_id_rotates_after_mfa` | 完成 MFA 后会话 id 不变，存在会话固定风险 |
-| `test_expired_session_rejected` | 会话过期时间没有被校验 |
-| `test_compare_is_constant_time` | 比较函数直接短路，没有常量时间实现 |
+| `test_replay_is_rejected` | `verify` 记录已接受的验证码，重放即拒 |
+| `test_session_id_rotates_after_mfa` | `mark_mfa` 轮换会话 id 并返回新 id |
+| `test_expired_session_rejected` | `get` 强制 1 小时 TTL，过期即删并抛 `KeyError` |
+| `test_compare_is_constant_time` | 新增 `compare_constant_time`（`hmac.compare_digest`），`compare` 委托给它 |
 
-审计只给了结论，没有给复现脚本。
+黑盒检测器：`python detector.py` —— 对 4 个攻击探针（与红色用例一一对应）给出可利用性判定与依据，并校验 16 个合法场景零误报；全部通过时退出码为 0。

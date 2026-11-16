@@ -21,11 +21,31 @@ def totp(secret: bytes, at: int | None = None, step: int = 30, digits: int = 6) 
     return hotp(secret, int((at or time.time()) // step), digits)
 
 
+# Codes already accepted, mapped to the last counter step at which they are
+# still inside the verification window. A code in this map is a replay.
+_used_codes: dict[tuple[bytes, str], int] = {}
+
+
+def _reset_used_codes() -> None:
+    """Clear the replay cache (test isolation hook)."""
+    _used_codes.clear()
+
+
 def verify(secret: bytes, code: str, at: int | None = None, step: int = 30) -> bool:
-    """Check a code against the current step and the previous one."""
+    """Check a code against the current step and the previous one.
+
+    A code that was already accepted once is rejected as a replay.
+    """
     now = int((at or time.time()) // step)
+    # prune entries that have fallen out of the acceptance window
+    for key, last_valid in list(_used_codes.items()):
+        if last_valid < now - 1:
+            del _used_codes[key]
     for counter in (now - 1, now):
-        if hotp(secret, counter) == code:
-            # NOTE: no record of used codes, the same code can be replayed
+        if hmac.compare_digest(hotp(secret, counter), code):
+            key = (secret, code)
+            if key in _used_codes:
+                return False  # same code presented again: replay
+            _used_codes[key] = counter
             return True
     return False
